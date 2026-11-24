@@ -18,18 +18,7 @@ function toast(msg, ms = 4500) {
   toast.t = setTimeout(() => { el.hidden = true; }, ms);
 }
 
-function basename(p) {
-  return p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
-}
-
-function timeAgo(ms) {
-  const s = Math.round((Date.now() - ms) / 1000);
-  if (s < 60) return "à l'instant";
-  if (s < 3600) return `il y a ${Math.round(s / 60)} min`;
-  if (s < 86400) return `il y a ${Math.round(s / 3600)} h`;
-  if (s < 86400 * 30) return `il y a ${Math.round(s / 86400)} j`;
-  return new Date(ms).toLocaleDateString('fr-FR');
-}
+const { basename, timeAgo, groupSessions } = window.ccUtils;
 
 function el(tag, props = {}, ...children) {
   const e = document.createElement(tag);
@@ -56,26 +45,19 @@ async function refreshSessions() {
 
 function renderProjects() {
   const filter = $('#filter').value.trim().toLowerCase();
-  const groups = new Map();
-  for (const s of sessions) {
-    const hay = `${s.cwd} ${s.title} ${s.lastPrompt || ''}`.toLowerCase();
-    if (filter && !hay.includes(filter)) continue;
-    const key = s.cwd.toLowerCase();
-    if (!groups.has(key)) groups.set(key, { cwd: s.cwd, items: [] });
-    groups.get(key).items.push(s);
-  }
+  const groups = groupSessions(sessions, filter);
 
   const openIds = new Set([...tabs.values()].filter((t) => !t.ended).map((t) => t.sessionId));
   const container = $('#projects');
   container.replaceChildren();
-  if (!groups.size) {
+  if (!groups.length) {
     container.append(el('div', { class: 'side-empty' },
       sessions.length ? 'Aucun résultat.' : 'Aucune session Claude Code trouvée. Créez un nouveau projet pour commencer.'));
     return;
   }
 
-  for (const g of groups.values()) {
-    const key = g.cwd.toLowerCase();
+  for (const g of groups) {
+    const key = g.key;
     const collapsed = collapsedProjects.has(key) && !filter;
     const project = el('div', { class: 'project' + (collapsed ? ' collapsed' : '') });
 
@@ -124,12 +106,12 @@ function openResume(s) {
   if (Date.now() - s.mtime < 120000 &&
       !confirm('Cette session semble encore active ailleurs (Claude Desktop ou un autre terminal).\n' +
                'La reprendre ici lancera une deuxième copie en parallèle. Continuer ?')) return;
-  openTab({ cwd: s.cwd, args: ['--resume', s.id], title: s.title, sessionId: s.id });
+  openTab({ cwd: s.cwd, mode: 'resume', title: s.title, sessionId: s.id });
 }
-function openNew(cwd) { openTab({ cwd, args: [], title: basename(cwd) + ' (nouvelle)' }); }
-function openContinue(cwd) { openTab({ cwd, args: ['--continue'], title: basename(cwd) }); }
+function openNew(cwd) { openTab({ cwd, mode: 'new', title: basename(cwd) + ' (nouvelle)' }); }
+function openContinue(cwd) { openTab({ cwd, mode: 'continue', title: basename(cwd) }); }
 
-async function openTab({ cwd, args, title, sessionId = null }) {
+async function openTab({ cwd, mode, title, sessionId = null }) {
   const wrap = el('div', { class: 'term-wrap' });
   $('#terminals').append(wrap);
   const term = new Terminal({
@@ -150,7 +132,7 @@ async function openTab({ cwd, args, title, sessionId = null }) {
   wrap.classList.add('active');
   fit.fit();
 
-  const res = await api.spawn({ cwd, args, cols: term.cols, rows: term.rows });
+  const res = await api.spawn({ cwd, mode, sessionId, cols: term.cols, rows: term.rows });
   if (res.error) {
     term.dispose();
     wrap.remove();

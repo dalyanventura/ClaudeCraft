@@ -123,6 +123,30 @@ aléatoire, jeton secret). Vos réglages Claude habituels ne sont pas modifiés.
 
 ## Développement
 
+### Tests
+
+```powershell
+npm test
+```
+
+Les tests unitaires (runner intégré de Node, dossier `test\`) couvrent la logique de
+l'application (états des sessions, affichage réservé au jeu, validation des noms de
+projet et des réglages), la lecture des sessions, la configuration, la détection du CLI
+Claude, le serveur de hooks (y compris l'appel réel `curl.exe`) et les appels Win32.
+
+### Intégration continue et sécurité
+
+À chaque pull request (`.github/workflows`) : tests unitaires sous Windows, `npm audit`,
+analyse **Trivy** (CVE, secrets, configuration), analyse **CodeQL** et revue des
+dépendances. Trivy et CodeQL tournent aussi chaque semaine pour détecter les nouvelles
+CVE, et **Dependabot** propose les mises à jour. Voir [SECURITY.md](SECURITY.md).
+
+La branche `main` est protégée : pas de commit direct, uniquement des pull requests
+fusionnées en squash et approuvées par le propriétaire du code (contournement réservé
+aux administrateurs).
+
+### Script de test manuel
+
 `CC_DEV_SCRIPT=<fichier.js>` exécute un script de test dans le processus principal
 (captures d'écran, état de l'overlay…). Voir `runDevScript` dans `src/main.js`.
 

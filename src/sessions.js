@@ -60,8 +60,7 @@ async function readMeta(f) {
   };
 }
 
-async function listSessions(limit = 150) {
-  const root = path.join(os.homedir(), '.claude', 'projects');
+async function listSessions(limit = 150, root = path.join(os.homedir(), '.claude', 'projects')) {
   let dirs;
   try { dirs = await fsp.readdir(root, { withFileTypes: true }); } catch { return []; }
 
@@ -81,8 +80,15 @@ async function listSessions(limit = 150) {
     }
   }
   files.sort((a, b) => b.mtime - a.mtime);
-  const metas = await Promise.all(files.slice(0, limit).map((f) => readMeta(f).catch(() => null)));
-  return metas.filter(Boolean);
+  // Lecture par lots, du plus récent au plus ancien, jusqu'à obtenir `limit` sessions valides
+  // (les fichiers sans dossier de travail ne doivent pas consommer la limite).
+  const out = [];
+  const BATCH = 25;
+  for (let i = 0; i < files.length && out.length < limit; i += BATCH) {
+    const metas = await Promise.all(files.slice(i, i + BATCH).map((f) => readMeta(f).catch(() => null)));
+    for (const m of metas) if (m && out.length < limit) out.push(m);
+  }
+  return out;
 }
 
-module.exports = { listSessions };
+module.exports = { listSessions, readMeta, extractText };

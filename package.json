@@ -8,6 +8,7 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
+    "test": "node --test \"test/**/*.test.js\"",
     "dist": "electron-builder --win --publish never"
   },
   "dependencies": {
@@ -70,5 +71,8 @@
       "shortcutName": "ClaudeCraft",
       "artifactName": "ClaudeCraft-Setup-${version}.exe"
     }
+  },
+  "overrides": {
+    "minimatch@>=7.0.0 <11.0.1": "^11.0.1"
   }
 }

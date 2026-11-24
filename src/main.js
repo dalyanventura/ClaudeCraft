@@ -10,6 +10,7 @@ const config = require('./config');
 const { resolveClaude, writeHookSettings, removeHookSettings } = require('./claude');
 const { listSessions } = require('./sessions');
 const { startHookServer } = require('./hookServer');
+const logic = require('./logic');
 
 app.setName('ClaudeCraft');
 app.setPath('userData', path.join(app.getPath('appData'), 'ClaudeCraft'));
@@ -218,14 +219,11 @@ function registerHotkey(accel) {
 // Les fenêtres ne sont jamais fermées/rouvertes, ce qui évite toute latence.
 
 function classifyForeground(fg) {
-  if (!fg) return null;
-  if (fg.pid === process.pid) return 'self';
-  const games = (config.get().gameProcesses || []).map((s) => s.toLowerCase());
-  return games.includes(fg.name) ? 'game' : 'other';
+  return logic.classifyForeground(fg, process.pid, config.get().gameProcesses || []);
 }
 
 function overlayAllowed() {
-  return config.get().overlayMode !== 'wow' || lastExternal === 'game';
+  return logic.overlayAllowed(config.get().overlayMode, lastExternal);
 }
 
 function applyPresence() {
@@ -268,9 +266,7 @@ function startForegroundWatch() {
 // ---------------------------------------------------------------- état des onglets
 
 function counts() {
-  const c = { working: 0, waiting: 0, attention: 0 };
-  for (const t of tabs.values()) if (t.state in c) c[t.state]++;
-  return c;
+  return logic.countStates([...tabs.values()].map((t) => t.state));
 }
 
 function updateBubble() {
@@ -290,30 +286,8 @@ function setTabState(tabId, state, sound = null, extra = {}) {
 function onHookEvent(tabId, event, payload) {
   const t = tabs.get(tabId);
   if (!t) return;
-  switch (event) {
-    case 'session-start':
-      setTabState(tabId, t.state || 'idle', null, { sessionId: payload.session_id || t.sessionId });
-      break;
-    case 'working':
-      setTabState(tabId, 'working');
-      break;
-    case 'stop':
-      setTabState(tabId, 'waiting', 'done');
-      break;
-    case 'notification': {
-      const type = payload.notification_type || '';
-      const msg = String(payload.message || '');
-      const idle = type === 'idle_prompt' || /waiting for your input/i.test(msg);
-      if (idle) {
-        // Rappel d'inactivité : déjà signalé par le hook Stop, on ne rejoue pas le son.
-        if (t.state !== 'waiting') setTabState(tabId, 'waiting', 'done');
-      } else {
-        // Demande de permission ou question de Claude.
-        setTabState(tabId, 'attention', 'attention', { lastMessage: msg });
-      }
-      break;
-    }
-  }
+  const next = logic.nextTabState(t.state, event, payload || {});
+  if (next) setTabState(tabId, next.state, next.sound, next.extra);
 }
 
 function send(channel, payload) {
@@ -322,20 +296,18 @@ function send(channel, payload) {
 
 // ---------------------------------------------------------------- terminaux
 
-function cleanEnv() {
-  const env = { ...process.env, COLORTERM: 'truecolor' };
-  // Si l'overlay est lancé depuis une session Claude Code, ne pas transmettre
-  // les variables qui feraient croire au CLI qu'il est imbriqué.
-  for (const k of Object.keys(env)) {
-    if (k === 'CLAUDECODE' || k.startsWith('CLAUDE_CODE_') || k === 'ELECTRON_RUN_AS_NODE' || k === 'CC_DEV_SCRIPT') delete env[k];
-  }
-  return env;
+// Seuls ces lancements sont acceptés depuis l'interface (pas d'arguments arbitraires).
+function launchArgs({ mode, sessionId }) {
+  if (mode === 'new') return [];
+  if (mode === 'continue') return ['--continue'];
+  if (mode === 'resume' && logic.isValidSessionId(sessionId)) return ['--resume', sessionId];
+  return null;
 }
 
-const quote = (s) => `"${String(s).replace(/"/g, '""')}"`;
-
-function spawnClaude({ cwd, args = [], cols = 120, rows = 30 }) {
-  if (!cwd || !fs.existsSync(cwd)) return { error: `Dossier introuvable : ${cwd}` };
+function spawnClaude({ cwd, mode, sessionId, cols = 120, rows = 30 }) {
+  if (typeof cwd !== 'string' || !cwd || !fs.existsSync(cwd)) return { error: `Dossier introuvable : ${cwd}` };
+  const args = launchArgs({ mode, sessionId });
+  if (!args) return { error: 'Lancement invalide.' };
   const claude = resolveClaude(config.get().claudePath);
   if (!claude) {
     return { error: "Claude Code (CLI) introuvable. Installez-le (voir README) ou indiquez 'claudePath' dans config.json." };
@@ -344,24 +316,19 @@ function spawnClaude({ cwd, args = [], cols = 120, rows = 30 }) {
   const settingsPath = writeHookSettings(path.join(app.getPath('userData'), 'hooks'), tabId, hook.port, hook.token);
   const fullArgs = ['--settings', settingsPath, ...args];
 
-  let file = claude.path;
-  let argv = fullArgs;
-  if (/\.(cmd|bat)$/i.test(file)) {
-    // Les scripts .cmd (installation npm) doivent passer par cmd.exe.
-    argv = `/d /s /c "${[quote(claude.path), ...fullArgs.map(quote)].join(' ')}"`;
-    file = process.env.ComSpec || 'cmd.exe';
-  }
+  const { file, argv } = logic.buildSpawnCommand(claude.path, fullArgs, process.env.ComSpec);
 
   let proc;
   try {
-    proc = pty.spawn(file, argv, { name: 'xterm-256color', cols, rows, cwd, env: cleanEnv(), useConpty: true });
+    // cleanEnv : si ClaudeCraft est lancé depuis une session Claude Code, ne pas transmettre
+    // les variables qui feraient croire au CLI qu'il est imbriqué.
+    proc = pty.spawn(file, argv, { name: 'xterm-256color', cols, rows, cwd, env: logic.cleanEnv(process.env), useConpty: true });
   } catch (e) {
     removeHookSettings(settingsPath);
     return { error: `Impossible de lancer Claude : ${e.message}` };
   }
 
-  const sessionId = args[0] === '--resume' ? args[1] : null;
-  tabs.set(tabId, { proc, settingsPath, state: 'idle', sessionId, cwd });
+  tabs.set(tabId, { proc, settingsPath, state: 'idle', sessionId: mode === 'resume' ? sessionId : null, cwd });
   proc.onData((data) => send('pty:data', { tabId, data }));
   proc.onExit(({ exitCode }) => {
     const t = tabs.get(tabId);
@@ -406,7 +373,7 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0];
   });
   ipcMain.handle('project:create', (_e, name) => {
-    const safe = String(name || '').trim().replace(/[<>:"/\\|?*\x00-\x1f]/g, '-').replace(/[. ]+$/, '');
+    const safe = logic.sanitizeProjectName(name);
     if (!safe) return { error: 'Nom de projet invalide.' };
     const dir = path.join(config.get().projectsDir, safe);
     if (fs.existsSync(dir)) return { error: `Le dossier existe déjà : ${dir}` };
@@ -423,12 +390,7 @@ function registerIpc() {
     claude: resolveClaude(config.get().claudePath),
   }));
   ipcMain.handle('config:set', (_e, patch) => {
-    const allowed = ['opacity', 'sound', 'volume', 'hotkey', 'sidebarCollapsed', 'overlayMode'];
-    const clean = Object.fromEntries(Object.entries(patch || {}).filter(([k]) => allowed.includes(k)));
-    if ('opacity' in clean) {
-      clean.opacity = Math.min(1, Math.max(0.4, Number(clean.opacity) || 1));
-    }
-    if ('overlayMode' in clean && !['wow', 'always'].includes(clean.overlayMode)) delete clean.overlayMode;
+    const clean = logic.sanitizeConfigPatch(patch);
     if ('hotkey' in clean) {
       const prev = config.get().hotkey;
       if (!registerHotkey(clean.hotkey)) {

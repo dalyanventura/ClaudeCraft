@@ -1,0 +1,30 @@
+# Dependabot : propose automatiquement des pull requests de mise à jour.
+# Les correctifs de sécurité (CVE) sont proposés dès leur publication, en plus
+# de ces vérifications hebdomadaires.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels: [dependencies]
+    commit-message:
+      prefix: deps
+    groups:
+      # Regroupe les mises à jour mineures et correctives pour limiter le nombre de PR.
+      npm-mineures:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, github-actions]
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']

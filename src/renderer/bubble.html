@@ -29,6 +29,7 @@
   <div id="pill" title="Cliquer pour ouvrir/réduire ClaudeCraft · glisser pour déplacer">
     <span class="gem">◆</span><span id="dot" class="dot"></span><span id="text">Claude</span>
   </div>
+  <script src="utils.js"></script>
   <script>
     const api = window.claudecraft;
     const pill = document.getElementById('pill');
@@ -68,16 +69,11 @@
       pill.classList.remove('dragging');
     });
 
-    api.on('indicator:update', ({ working, waiting, attention }) => {
-      const dot = document.getElementById('dot');
-      const text = document.getElementById('text');
-      let cls = '', label = 'Claude';
-      if (attention) { cls = 'attention'; label = attention > 1 ? `${attention} autorisations demandées` : 'Autorisation demandée'; }
-      else if (waiting) { cls = 'waiting'; label = waiting > 1 ? `${waiting} sessions vous attendent` : 'Claude vous attend'; }
-      else if (working) { cls = 'working'; label = working > 1 ? `${working} sessions en cours…` : 'Claude travaille…'; }
-      dot.className = 'dot' + (cls ? ' on ' + cls : '');
-      text.textContent = label;
-      pill.classList.toggle('alert', !!attention);
+    api.on('indicator:update', (counts) => {
+      const { cls, text } = window.ccUtils.bubbleLabel(counts);
+      document.getElementById('dot').className = 'dot' + (cls ? ' on ' + cls : '');
+      document.getElementById('text').textContent = text;
+      pill.classList.toggle('alert', cls === 'attention');
     });
   </script>
 </body>
