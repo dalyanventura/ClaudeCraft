@@ -114,3 +114,7 @@ aléatoire, jeton secret). Vos réglages Claude habituels ne sont pas modifiés.
 Projet personnel non officiel, sans lien avec Anthropic ni Blizzard Entertainment.
 Claude et Claude Code sont des marques d'Anthropic ; World of Warcraft est une marque de
 Blizzard Entertainment. Fonctionne uniquement sous Windows.
+
+## Licence
+
+MIT — voir [LICENSE](LICENSE).

@@ -5,6 +5,7 @@
   "description": "Fenêtre superposée (overlay) pour utiliser Claude Code tout en jouant à World of Warcraft",
   "main": "src/main.js",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "start": "electron ."
   },
