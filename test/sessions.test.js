@@ -66,7 +66,9 @@ test('listSessions : un fichier récent invalide ne consomme pas la limite', asy
 });
 
 test("listSessions : dossier absent => liste vide (pas d'erreur)", async () => {
-  assert.deepEqual(await listSessions(10, path.join(os.tmpdir(), 'nexiste-pas-' + Date.now())), []);
+  // Dossier inexistant situé dans un dossier temporaire privé (mkdtemp), jamais un nom prévisible.
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), 'claudecraft-absent-'));
+  assert.deepEqual(await listSessions(10, path.join(parent, 'nexiste-pas')), []);
 });
 
 test('extractText : texte utilisateur sans balises système', () => {
