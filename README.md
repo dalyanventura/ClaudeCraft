@@ -56,26 +56,43 @@ En plein écran exclusif, Windows ne peut pas afficher d'autre fenêtre par-dess
 
 ## Installation
 
-Prérequis :
+### Télécharger (recommandé)
 
-1. [Node.js LTS](https://nodejs.org), par exemple : `winget install OpenJS.NodeJS.LTS`.
-2. Claude Code (CLI). L'application cherche dans cet ordre :
-   - `claude.exe` de l'installation native (`~/.local/bin`) ;
-   - `claude` dans le PATH ou installé via npm ;
-   - le binaire fourni avec l'application Claude Desktop.
+Sur la page [Releases](https://github.com/dalyanventura/ClaudeCraft/releases/latest) :
 
-   Installation officielle : `irm https://claude.ai/install.ps1 | iex`.
+- **`ClaudeCraft-Setup-<version>.exe`** : installeur (raccourcis Bureau et menu Démarrer) ;
+- **`ClaudeCraft-<version>-win-x64-portable.zip`** : version sans installation, à
+  décompresser puis lancer `ClaudeCraft.exe`.
 
-Puis, dans ce dossier :
+L'application n'est pas signée numériquement : au premier lancement, Windows SmartScreen
+peut afficher « Windows a protégé votre ordinateur ». Cliquez sur **Informations
+complémentaires**, puis **Exécuter quand même**.
+
+Prérequis : Claude Code (CLI). L'application cherche dans cet ordre :
+- `claude.exe` de l'installation native (`~/.local/bin`) ;
+- `claude` dans le PATH ou installé via npm ;
+- le binaire fourni avec l'application Claude Desktop.
+
+Installation officielle de Claude Code : `irm https://claude.ai/install.ps1 | iex`.
+
+Au premier lancement d'une session, Claude Code demande de choisir un thème, puis de
+**se connecter** (option 1 : compte Claude avec abonnement). La connexion du CLI est
+distincte de celle de l'application Claude Desktop. Il ne faut la faire qu'une fois.
+
+### Depuis le code source
+
+Avec [Node.js LTS](https://nodejs.org) (`winget install OpenJS.NodeJS.LTS`), dans ce dossier :
 
 ```powershell
 npm install
 npm start
 ```
 
-Au premier lancement d'une session, Claude Code demande de choisir un thème, puis de
-**se connecter** (option 1 : compte Claude avec abonnement). La connexion du CLI est
-distincte de celle de l'application Claude Desktop. Il ne faut la faire qu'une fois.
+Pour construire l'installeur et la version portable (dans `dist\`) :
+
+```powershell
+npm run dist
+```
 
 Si `npm start` indique qu'Electron n'est pas installé (certaines versions de npm ne lancent
 pas les scripts d'installation), exécutez `node node_modules/electron/install.js`.

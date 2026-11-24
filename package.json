@@ -7,7 +7,8 @@
   "private": true,
   "license": "MIT",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist": "electron-builder --win --publish never"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.2.0-beta.18",
@@ -16,6 +17,58 @@
     "koffi": "^3.3.8"
   },
   "devDependencies": {
-    "electron": "^45.4.1"
+    "electron": "^45.4.1",
+    "electron-builder": "^26.18.0"
+  },
+  "author": "dalyanventura",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dalyanventura/ClaudeCraft.git"
+  },
+  "build": {
+    "appId": "com.dalyanventura.claudecraft",
+    "productName": "ClaudeCraft",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "LICENSE"
+    ],
+    "asarUnpack": [
+      "node_modules/@lydell/**",
+      "node_modules/koffi/**",
+      "node_modules/@koromix/**"
+    ],
+    "npmRebuild": false,
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "ClaudeCraft-${version}-win-x64-portable.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ClaudeCraft",
+      "artifactName": "ClaudeCraft-Setup-${version}.exe"
+    }
   }
 }
