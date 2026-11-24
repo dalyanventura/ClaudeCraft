@@ -33,6 +33,9 @@ function nextTabState(current, event, payload = {}) {
       return { state: 'working', sound: null, extra: {} };
     case 'stop':
       return { state: 'waiting', sound: 'done', extra: {} };
+    case 'interrupt':
+      // Interruption (Échap) : Claude Code ne déclenche pas le hook Stop, détectée dans la sortie du terminal.
+      return current === 'working' ? { state: 'waiting', sound: 'done', extra: {} } : null;
     case 'notification': {
       const type = payload.notification_type || '';
       const msg = String(payload.message || '');
@@ -47,6 +50,22 @@ function nextTabState(current, event, payload = {}) {
     default:
       return null;
   }
+}
+
+// Séquences d'échappement ANSI/VT (CSI, OSC, échappements simples).
+const ANSI_RE = /\x1b\[[0-9;?]*[ -\/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[@-_]/g;
+// Déplacement du curseur vers la droite : ConPTY s'en sert parfois à la place des espaces.
+const CURSOR_FWD_RE = /\x1b\[\d*C/g;
+const INTERRUPT_RE = /What\s*should\s*Claude\s*do\s*next\?/i;
+
+/** Texte visible d'une sortie de terminal (sans séquences d'échappement). */
+function stripAnsi(data) {
+  return String(data ?? '').replace(CURSOR_FWD_RE, ' ').replace(ANSI_RE, '');
+}
+
+/** La sortie du terminal annonce-t-elle une interruption (« Interrupted · What should Claude do next? ») ? */
+function isInterruptOutput(text) {
+  return INTERRUPT_RE.test(text);
 }
 
 /** Compte les onglets par état (pour le bouton flottant). */
@@ -127,6 +146,8 @@ module.exports = {
   overlayAllowed,
   nextTabState,
   countStates,
+  stripAnsi,
+  isInterruptOutput,
   sanitizeProjectName,
   cleanEnv,
   buildSpawnCommand,
