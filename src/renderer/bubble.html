@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+  <style>
+    html, body { margin: 0; background: transparent; overflow: hidden; }
+    body { display: inline-block; padding: 3px; font: 600 13px "Segoe UI", sans-serif; }
+    #pill {
+      display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+      padding: 5px 12px 5px 8px; border-radius: 17px; color: #f3e6c9;
+      background: rgba(25, 19, 12, .92); border: 1px solid #8a6a2c;
+      box-shadow: 0 1px 5px rgba(0, 0, 0, .6);
+      cursor: pointer; user-select: none;
+    }
+    #pill:hover { border-color: #e6b54a; background: rgba(40, 30, 18, .95); }
+    #pill.dragging { cursor: grabbing; }
+    .gem { color: #d97757; font-size: 15px; line-height: 1; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; display: none; }
+    .dot.on { display: inline-block; }
+    .working { background: #5aa9e6; animation: pulse 1.2s infinite; }
+    .waiting { background: #67c76b; }
+    .attention { background: #f08c3a; animation: pulse .6s infinite; }
+    #pill.alert { border-color: #f08c3a; }
+    @keyframes pulse { 50% { opacity: .3; } }
+  </style>
+</head>
+<body>
+  <div id="pill" title="Cliquer pour ouvrir/réduire ClaudeCraft · glisser pour déplacer">
+    <span class="gem">◆</span><span id="dot" class="dot"></span><span id="text">Claude</span>
+  </div>
+  <script>
+    const api = window.claudecraft;
+    const pill = document.getElementById('pill');
+
+    // Taille de la fenêtre = taille du bouton (pour ne jamais bloquer les clics du jeu autour).
+    const reportSize = () => {
+      const r = document.body.getBoundingClientRect();
+      api.bubbleSize(r.width, r.height);
+    };
+    new ResizeObserver(reportSize).observe(document.body);
+
+    // Clic = ouvrir ; glisser (plus de 4 px) = déplacer.
+    let start = null, last = null, dragged = false;
+    pill.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      pill.setPointerCapture(e.pointerId);
+      start = last = { x: e.screenX, y: e.screenY };
+      dragged = false;
+    });
+    pill.addEventListener('pointermove', (e) => {
+      if (!start) return;
+      if (!dragged && Math.hypot(e.screenX - start.x, e.screenY - start.y) > 4) {
+        dragged = true;
+        pill.classList.add('dragging');
+      }
+      if (dragged) {
+        api.bubbleMove(e.screenX - last.x, e.screenY - last.y);
+        last = { x: e.screenX, y: e.screenY };
+      }
+    });
+    pill.addEventListener('pointerup', (e) => {
+      if (!start) return;
+      pill.releasePointerCapture(e.pointerId);
+      if (dragged) api.bubbleDragEnd();
+      else api.toggle();
+      start = null;
+      pill.classList.remove('dragging');
+    });
+
+    api.on('indicator:update', ({ working, waiting, attention }) => {
+      const dot = document.getElementById('dot');
+      const text = document.getElementById('text');
+      let cls = '', label = 'Claude';
+      if (attention) { cls = 'attention'; label = attention > 1 ? `${attention} autorisations demandées` : 'Autorisation demandée'; }
+      else if (waiting) { cls = 'waiting'; label = waiting > 1 ? `${waiting} sessions vous attendent` : 'Claude vous attend'; }
+      else if (working) { cls = 'working'; label = working > 1 ? `${working} sessions en cours…` : 'Claude travaille…'; }
+      dot.className = 'dot' + (cls ? ' on ' + cls : '');
+      text.textContent = label;
+      pill.classList.toggle('alert', !!attention);
+    });
+  </script>
+</body>
+</html>
