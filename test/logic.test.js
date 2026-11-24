@@ -50,6 +50,19 @@ test("nextTabState : rappel d'inactivité sans rejouer le son si déjà en atten
     { state: 'waiting', sound: 'done', extra: {} });
 });
 
+test('nextTabState : interruption => attend la réponse avec son, seulement si Claude travaillait', () => {
+  assert.deepEqual(logic.nextTabState('working', 'interrupt'), { state: 'waiting', sound: 'done', extra: {} });
+  assert.equal(logic.nextTabState('waiting', 'interrupt'), null);
+  assert.equal(logic.nextTabState('idle', 'interrupt'), null);
+});
+
+test("stripAnsi / isInterruptOutput : repère le message d'interruption dans la sortie brute", () => {
+  const raw = '\x1b[38;2;255;107;128m  ⎿  Interrupted\x1b[39m \x1b[2m· What\x1b[1Cshould Claude do next?\x1b[22m\r\n';
+  assert.ok(logic.isInterruptOutput(logic.stripAnsi(raw)));
+  assert.equal(logic.stripAnsi('\x1b]0;titre\x07ok\x1b[2K'), 'ok');
+  assert.ok(!logic.isInterruptOutput(logic.stripAnsi('Claude is thinking…')));
+});
+
 test('nextTabState : événement inconnu ignoré', () => {
   assert.equal(logic.nextTabState('idle', 'inconnu', {}), null);
 });

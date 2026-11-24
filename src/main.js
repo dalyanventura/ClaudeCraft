@@ -290,6 +290,22 @@ function onHookEvent(tabId, event, payload) {
   if (next) setTabState(tabId, next.state, next.sound, next.extra);
 }
 
+// Une interruption (Échap) ne déclenche aucun hook : on la repère dans la sortie du terminal.
+// Une fin de ligne est conservée d'un bloc à l'autre (texte coupé entre deux blocs) ; on ignore
+// les redessins complets qui suivent un redimensionnement (ils réaffichent l'historique).
+const RESIZE_GRACE_MS = 1500;
+function watchForInterrupt(tabId, data) {
+  const t = tabs.get(tabId);
+  if (!t) return;
+  const text = (t.outTail || '') + logic.stripAnsi(data);
+  t.outTail = text.slice(-80);
+  if (t.state !== 'working' || Date.now() - (t.lastResize || 0) < RESIZE_GRACE_MS) return;
+  if (logic.isInterruptOutput(text)) {
+    t.outTail = '';
+    onHookEvent(tabId, 'interrupt', {});
+  }
+}
+
 function send(channel, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
 }
@@ -329,7 +345,10 @@ function spawnClaude({ cwd, mode, sessionId, cols = 120, rows = 30 }) {
   }
 
   tabs.set(tabId, { proc, settingsPath, state: 'idle', sessionId: mode === 'resume' ? sessionId : null, cwd });
-  proc.onData((data) => send('pty:data', { tabId, data }));
+  proc.onData((data) => {
+    send('pty:data', { tabId, data });
+    watchForInterrupt(tabId, data);
+  });
   proc.onExit(({ exitCode }) => {
     const t = tabs.get(tabId);
     if (t) removeHookSettings(t.settingsPath);
@@ -355,6 +374,7 @@ function registerIpc() {
   ipcMain.on('pty:resize', (_e, { tabId, cols, rows }) => {
     const t = tabs.get(tabId);
     if (t && cols > 0 && rows > 0) {
+      t.lastResize = Date.now();
       try { t.proc.resize(cols, rows); } catch { /* processus déjà terminé */ }
     }
   });
