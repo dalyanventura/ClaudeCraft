@@ -16,8 +16,8 @@ function compareVersions(a, b) {
 
 // Binaire Claude Code embarqué par l'application Claude Desktop :
 // %LOCALAPPDATA%\Claude-Data\<profil>\claude-code\<version>\<hash>\claude.exe
-function findDesktopBundled() {
-  const root = path.join(process.env.LOCALAPPDATA || '', 'Claude-Data');
+function findDesktopBundled(localAppData = process.env.LOCALAPPDATA || '') {
+  const root = path.join(localAppData, 'Claude-Data');
   const found = [];
   let profiles = [];
   try { profiles = fs.readdirSync(root); } catch { return null; }
@@ -39,28 +39,32 @@ function findDesktopBundled() {
   return found.length ? found[0].exe : null;
 }
 
-/** Retourne { path, source } ou null. */
-function resolveClaude(override) {
+/**
+ * Retourne { path, source } ou null.
+ * `env` et `home` sont paramétrables pour les tests.
+ */
+function resolveClaude(override, env = process.env, home = os.homedir()) {
   if (override && isFile(override)) return { path: override, source: 'config' };
 
-  const home = os.homedir();
   // 1. Installation native officielle
   const native = path.join(home, '.local', 'bin', 'claude.exe');
   if (isFile(native)) return { path: native, source: 'native' };
 
   // 2. PATH (installation npm => claude.cmd)
-  for (const dir of (process.env.PATH || '').split(path.delimiter)) {
+  for (const dir of (env.PATH || env.Path || '').split(path.delimiter)) {
     if (!dir) continue;
     for (const name of ['claude.exe', 'claude.cmd']) {
       const p = path.join(dir, name);
       if (isFile(p)) return { path: p, source: 'path' };
     }
   }
-  const npmShim = path.join(process.env.APPDATA || '', 'npm', 'claude.cmd');
-  if (isFile(npmShim)) return { path: npmShim, source: 'npm' };
+  if (env.APPDATA) {
+    const npmShim = path.join(env.APPDATA, 'npm', 'claude.cmd');
+    if (isFile(npmShim)) return { path: npmShim, source: 'npm' };
+  }
 
   // 3. Binaire fourni avec l'application Claude Desktop
-  const bundled = findDesktopBundled();
+  const bundled = env.LOCALAPPDATA ? findDesktopBundled(env.LOCALAPPDATA) : null;
   if (bundled) return { path: bundled, source: 'desktop' };
 
   return null;
@@ -94,4 +98,6 @@ function removeHookSettings(file) {
   try { fs.unlinkSync(file); } catch { /* déjà supprimé */ }
 }
 
-module.exports = { resolveClaude, writeHookSettings, removeHookSettings };
+module.exports = {
+  resolveClaude, writeHookSettings, removeHookSettings, hookCommand, compareVersions, findDesktopBundled,
+};
