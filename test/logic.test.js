@@ -104,8 +104,16 @@ test('buildSpawnCommand : script .cmd lancé via cmd.exe avec guillemets échapp
 
 test("isValidSessionId : n'accepte que des identifiants sûrs", () => {
   assert.equal(logic.isValidSessionId('0355c68f-25d3-435f-bd6b-4ecbe0af1baf'), true);
+  assert.equal(logic.isValidSessionId('a'), true);
+  assert.equal(logic.isValidSessionId('x'.repeat(100)), true);
   for (const bad of ['', '--dangerously-skip-permissions x', 'a;b', 'a b', '../x', null, 42, 'x'.repeat(101)]) {
     assert.equal(logic.isValidSessionId(bad), false, `${bad} devrait être refusé`);
+  }
+});
+
+test("isValidSessionId : une option seule n'est jamais acceptée (injection d'option CLI)", () => {
+  for (const option of ['--dangerously-skip-permissions', '--help', '-p', '-', '--', '-0355c68f']) {
+    assert.equal(logic.isValidSessionId(option), false, `${option} devrait être refusé`);
   }
 });
 

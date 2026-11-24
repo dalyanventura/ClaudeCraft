@@ -99,9 +99,13 @@ function buildSpawnCommand(claudePath, args, comspec = 'cmd.exe') {
   return { file: claudePath, argv: [...args] };
 }
 
-/** Arguments du CLI pour reprendre une session : seuls des identifiants sûrs sont acceptés. */
+/**
+ * Arguments du CLI pour reprendre une session : seuls des identifiants sûrs sont acceptés.
+ * Le premier caractère doit être alphanumérique : un identifiant commençant par un tiret
+ * (ex. "--dangerously-skip-permissions") serait interprété comme une option par le CLI.
+ */
 function isValidSessionId(id) {
-  return typeof id === 'string' && /^[0-9a-zA-Z-]{1,100}$/.test(id);
+  return typeof id === 'string' && /^[0-9a-zA-Z][0-9a-zA-Z-]{0,99}$/.test(id);
 }
 
 const CONFIG_KEYS = ['opacity', 'sound', 'volume', 'hotkey', 'sidebarCollapsed', 'overlayMode'];
