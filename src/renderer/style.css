@@ -144,6 +144,9 @@ body.sidebar-collapsed #sidebar { display: none; }
 .dot.attention { background: var(--attention); animation: pulse .6s infinite; }
 .dot.ended { background: #555; }
 .tab.unread .label { color: var(--gold); font-weight: 600; }
+.tab.shell .label { font-family: "Cascadia Mono", Consolas, monospace; font-size: 12px; }
+.tab.shell.ended .label { text-decoration: line-through; }
+button.mono { font-family: "Cascadia Mono", Consolas, monospace; font-weight: 600; color: var(--gold); }
 @keyframes pulse { 50% { opacity: .35; } }
 
 /* ---------- terminaux ---------- */

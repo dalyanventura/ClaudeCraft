@@ -143,3 +143,18 @@ test('sanitizeConfigPatch : clés inconnues ignorées et valeurs bornées', () =
   assert.deepEqual(logic.sanitizeConfigPatch({ hotkey: 'Alt+F12' }), { hotkey: 'Alt+F12' });
   assert.deepEqual(logic.sanitizeConfigPatch(null), {});
 });
+
+test('resolveShell : config, puis pwsh dans le PATH, puis Windows PowerShell, puis cmd.exe', () => {
+  const r = String.raw;
+  const cmd = r`C:\Windows\system32\cmd.exe`;
+  const env = { PATH: r`C:\A;C:\Pwsh\ `.trim(), SystemRoot: r`C:\Windows`, ComSpec: cmd };
+  const winPs = r`C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`;
+  const pwsh = r`C:\Pwsh\pwsh.exe`;
+  const bash = r`D:\bash.exe`;
+  const has = (...files) => (p) => files.includes(p);
+  assert.equal(logic.resolveShell(bash, env, has(bash, winPs)), bash);
+  assert.equal(logic.resolveShell(r`D:\absent.exe`, env, has(pwsh, winPs)), pwsh);
+  assert.equal(logic.resolveShell(null, env, has(winPs)), winPs);
+  assert.equal(logic.resolveShell(null, env, has()), cmd);
+  assert.equal(logic.resolveShell(null, {}, has()), 'cmd.exe');
+});

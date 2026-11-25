@@ -127,6 +127,24 @@ function isValidSessionId(id) {
   return typeof id === 'string' && /^[0-9a-zA-Z][0-9a-zA-Z-]{0,99}$/.test(id);
 }
 
+/**
+ * Shell à lancer dans un onglet « Terminal » : `override` (config shellPath) s'il existe,
+ * sinon PowerShell 7 (pwsh.exe) trouvé dans le PATH, sinon Windows PowerShell, sinon cmd.exe.
+ * `exists` est paramétrable pour les tests.
+ */
+function resolveShell(override, env = {}, exists = () => false, sep = ';') {
+  if (typeof override === 'string' && override && exists(override)) return override;
+  for (const dir of String(env.PATH || env.Path || '').split(sep)) {
+    if (!dir) continue;
+    const p = dir.replace(/[\\/]+$/, '') + '\\pwsh.exe';
+    if (exists(p)) return p;
+  }
+  const root = env.SystemRoot || env.SYSTEMROOT || 'C:\\Windows';
+  const winPs = `${root}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`;
+  if (exists(winPs)) return winPs;
+  return env.ComSpec || env.COMSPEC || 'cmd.exe';
+}
+
 const CONFIG_KEYS = ['opacity', 'sound', 'volume', 'hotkey', 'sidebarCollapsed', 'overlayMode'];
 
 /** Filtre et normalise une modification de réglages venant de l'interface. */
@@ -153,4 +171,5 @@ module.exports = {
   buildSpawnCommand,
   isValidSessionId,
   sanitizeConfigPatch,
+  resolveShell,
 };

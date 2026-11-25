@@ -21,6 +21,10 @@ indépendante : elle ne lit pas la mémoire du jeu et n'envoie aucune frappe à 
 - **Ouvrir un dossier…** : lance Claude dans n'importe quel dossier.
 - **Onglets** : plusieurs sessions en parallèle, avec une pastille d'état
   (bleu = travaille, vert = attend votre réponse, orange = demande une autorisation).
+- **Terminal intégré** (`>_` dans la barre de titre ou sur un projet, ou `Ctrl+Maj+T`) :
+  ouvre un onglet PowerShell dans le dossier du projet pour tester des commandes sans
+  quitter l'overlay. PowerShell 7 (`pwsh`) est utilisé s'il est installé, sinon Windows
+  PowerShell ; `shellPath` dans la configuration permet d'en choisir un autre.
 - **Signal sonore** quand Claude a fini (arpège montant) ou demande une autorisation
   (double appel). Le son est coupé si vous regardez déjà l'onglet concerné.
 - **Bouton flottant** « ◆ Claude », toujours affiché en jeu, que la fenêtre soit
@@ -43,6 +47,7 @@ indépendante : elle ne lit pas la mémoire du jeu et n'envoie aucune frappe à 
 | Afficher / masquer l'overlay (global) | `Ctrl+Alt+C` |
 | Coller du texte | `Ctrl+V` ou clic droit |
 | Copier la sélection | `Ctrl+C` (avec sélection) ou clic droit |
+| Nouveau terminal (PowerShell) | `Ctrl+Maj+T` |
 | Interrompre Claude | `Échap` |
 | Coller une image dans Claude | `Alt+V` |
 
@@ -112,6 +117,7 @@ Clés utiles :
   (par défaut `Wow.exe`, `WowClassic.exe`… ; WoW Forever utilise `Wow.exe`) ;
 - `projectsDir` : dossier des nouveaux projets ;
 - `claudePath` : chemin forcé vers `claude.exe` ;
+- `shellPath` : shell des onglets Terminal (par ex. `"C:\\Program Files\\Git\\bin\\bash.exe"`) ;
 - `volume` : de `0` à `1`.
 
 ## Fonctionnement du signal sonore
