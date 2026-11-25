@@ -5,6 +5,7 @@ const EVENTS = ['pty:data', 'pty:exit', 'tab:state', 'overlay:shown', 'indicator
 
 contextBridge.exposeInMainWorld('claudecraft', {
   listSessions: () => ipcRenderer.invoke('sessions:list'),
+  deleteSession: (id) => ipcRenderer.invoke('sessions:delete', id),
   spawn: (opts) => ipcRenderer.invoke('pty:spawn', opts),
   write: (tabId, data) => ipcRenderer.send('pty:write', { tabId, data }),
   resize: (tabId, cols, rows) => ipcRenderer.send('pty:resize', { tabId, cols, rows }),
