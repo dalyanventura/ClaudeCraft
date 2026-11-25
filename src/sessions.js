@@ -60,7 +60,7 @@ async function readMeta(f) {
   };
 }
 
-async function listSessions(limit = 150, root = path.join(os.homedir(), '.claude', 'projects')) {
+async function listSessions(limit = 150, root = DEFAULT_ROOT) {
   let dirs;
   try { dirs = await fsp.readdir(root, { withFileTypes: true }); } catch { return []; }
 
@@ -91,4 +91,29 @@ async function listSessions(limit = 150, root = path.join(os.homedir(), '.claude
   return out;
 }
 
-module.exports = { listSessions, readMeta, extractText };
+const DEFAULT_ROOT = path.join(os.homedir(), '.claude', 'projects');
+const VALID_ID = /^[0-9a-zA-Z][0-9a-zA-Z-]{0,99}$/;
+
+/**
+ * Chemins à supprimer pour une session : son fichier <id>.jsonl et, s'il existe,
+ * le dossier <id>/ voisin (résultats d'outils, sous-agents). Recherche dans tous les projets.
+ */
+async function sessionPaths(id, root = DEFAULT_ROOT) {
+  if (typeof id !== 'string' || !VALID_ID.test(id)) return [];
+  let dirs;
+  try { dirs = await fsp.readdir(root, { withFileTypes: true }); } catch { return []; }
+  const out = [];
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue;
+    const file = path.join(root, d.name, id + '.jsonl');
+    try {
+      if (!(await fsp.stat(file)).isFile()) continue;
+    } catch { continue; }
+    out.push(file);
+    const extra = path.join(root, d.name, id);
+    try { if ((await fsp.stat(extra)).isDirectory()) out.push(extra); } catch { /* absent */ }
+  }
+  return out;
+}
+
+module.exports = { listSessions, readMeta, extractText, sessionPaths };

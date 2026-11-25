@@ -83,11 +83,29 @@ function renderProjects() {
       },
         el('div', { class: 'session-title' }, s.title),
         el('div', { class: 'session-meta' }, timeAgo(s.mtime) + (openIds.has(s.id) ? ' · ouverte' : '')),
+        openIds.has(s.id) ? null : el('button', {
+          class: 'session-delete',
+          title: 'Supprimer cette conversation (envoyée à la Corbeille)',
+          onclick: (e) => { e.stopPropagation(); deleteSession(s); },
+        }, '🗑'),
       ));
     }
     project.append(head, el('div', { class: 'project-path' }, g.cwd), list);
     container.append(project);
   }
+}
+
+async function deleteSession(s) {
+  if (!confirm(`Supprimer la conversation « ${s.title} » ?
+
+` +
+               'Elle sera envoyée à la Corbeille de Windows et disparaîtra aussi de Claude Code ' +
+               '(claude --resume) et de Claude Desktop.')) return;
+  const res = await api.deleteSession(s.id);
+  if (res && res.error) return toast(res.error, 6000);
+  sessions = sessions.filter((x) => x.id !== s.id);
+  renderProjects();
+  toast('Conversation envoyée à la Corbeille.');
 }
 
 // ------------------------------------------------------------------ onglets & terminaux

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { listSessions, extractText } = require('../src/sessions');
+const { listSessions, extractText, sessionPaths } = require('../src/sessions');
 
 const line = (o) => JSON.stringify(o) + '\n';
 
@@ -76,4 +76,17 @@ test('extractText : texte utilisateur sans balises système', () => {
   assert.equal(extractText('<command-name>/clear</command-name>'), '');
   assert.equal(extractText([{ type: 'text', text: 'a' }, { type: 'image' }, { type: 'text', text: 'b' }]), 'a b');
   assert.equal(extractText(undefined), '');
+});
+
+test('sessionPaths : fichier .jsonl et dossier voisin, identifiants invalides refusés', async () => {
+  const root = makeRoot();
+  const proj = path.join(root, 'C--Projets-Addon');
+  fs.mkdirSync(path.join(proj, 'aaaa-1111'));
+  assert.deepEqual(await sessionPaths('aaaa-1111', root),
+    [path.join(proj, 'aaaa-1111.jsonl'), path.join(proj, 'aaaa-1111')]);
+  assert.deepEqual(await sessionPaths('bbbb-2222', root), [path.join(proj, 'bbbb-2222.jsonl')]);
+  assert.deepEqual(await sessionPaths('inconnue', root), []);
+  for (const bad of ['../C--Projets-Addon/aaaa-1111', '..', '', null, 'a/b', 'a\b']) {
+    assert.deepEqual(await sessionPaths(bad, root), []);
+  }
 });

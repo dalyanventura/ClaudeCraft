@@ -8,7 +8,7 @@ const os = require('os');
 const pty = require('@lydell/node-pty');
 const config = require('./config');
 const { resolveClaude, writeHookSettings, removeHookSettings } = require('./claude');
-const { listSessions } = require('./sessions');
+const { listSessions, sessionPaths } = require('./sessions');
 const { startHookServer } = require('./hookServer');
 const logic = require('./logic');
 
@@ -363,6 +363,23 @@ function spawnClaude({ cwd, mode, sessionId, cols = 120, rows = 30 }) {
 
 function registerIpc() {
   ipcMain.handle('sessions:list', () => listSessions());
+  // Suppression d'une conversation : envoyée à la Corbeille (récupérable), jamais effacée
+  // définitivement. Refusée si la conversation est ouverte dans un onglet.
+  ipcMain.handle('sessions:delete', async (_e, id) => {
+    if (!logic.isValidSessionId(id)) return { error: 'Identifiant de session invalide.' };
+    if ([...tabs.values()].some((t) => t.sessionId === id)) {
+      return { error: "Cette conversation est ouverte dans un onglet : fermez l'onglet avant de la supprimer." };
+    }
+    const paths = await sessionPaths(id);
+    if (!paths.length) return { error: 'Conversation introuvable (déjà supprimée ?).' };
+    try {
+      for (const p of paths) await shell.trashItem(p);
+    } catch (e) {
+      logError('suppression de session', e);
+      return { error: `Suppression impossible : ${e.message}` };
+    }
+    return { ok: true };
+  });
   ipcMain.handle('pty:spawn', (_e, opts) => spawnClaude(opts || {}));
   ipcMain.on('pty:write', (_e, { tabId, data }) => {
     const t = tabs.get(tabId);
