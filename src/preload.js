@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('claudecraft', {
   listSessions: () => ipcRenderer.invoke('sessions:list'),
   deleteSession: (id) => ipcRenderer.invoke('sessions:delete', id),
   spawn: (opts) => ipcRenderer.invoke('pty:spawn', opts),
+  spawnShell: (opts) => ipcRenderer.invoke('pty:spawnShell', opts),
   write: (tabId, data) => ipcRenderer.send('pty:write', { tabId, data }),
   resize: (tabId, cols, rows) => ipcRenderer.send('pty:resize', { tabId, cols, rows }),
   kill: (tabId) => ipcRenderer.send('pty:kill', tabId),

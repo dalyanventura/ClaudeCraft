@@ -16,6 +16,7 @@ const defaults = {
   bounds: null,                 // position/taille de la fenêtre (sauvegardée automatiquement)
   sidebarCollapsed: false,
   claudePath: null,             // chemin forcé vers claude.exe (sinon détection automatique)
+  shellPath: null,              // shell des onglets Terminal (sinon pwsh.exe, puis Windows PowerShell)
   projectsDir: path.join(os.homedir(), 'ClaudeProjects'), // où créer les nouveaux projets
 };
 

@@ -4,7 +4,7 @@ const $ = (sel) => document.querySelector(sel);
 
 let cfg = {};
 let sessions = [];
-const tabs = new Map(); // tabId -> { term, fit, wrap, tabEl, title, cwd, sessionId, state, unread, ended }
+const tabs = new Map(); // tabId -> { kind ('claude' | 'shell'), term, fit, wrap, tabEl, title, cwd, sessionId, state, unread, ended }
 let activeTab = null;
 const collapsedProjects = new Set(JSON.parse(localStorage.getItem('collapsed') || '[]'));
 
@@ -47,7 +47,7 @@ function renderProjects() {
   const filter = $('#filter').value.trim().toLowerCase();
   const groups = groupSessions(sessions, filter);
 
-  const openIds = new Set([...tabs.values()].filter((t) => !t.ended).map((t) => t.sessionId));
+  const openIds = new Set([...tabs.values()].filter((t) => !t.ended && t.sessionId).map((t) => t.sessionId));
   const container = $('#projects');
   container.replaceChildren();
   if (!groups.length) {
@@ -66,6 +66,7 @@ function renderProjects() {
       el('span', { class: 'project-name' }, basename(g.cwd)),
       el('button', { title: 'Nouvelle session dans ce projet', onclick: (e) => { e.stopPropagation(); openNew(g.cwd); } }, '+ Nouvelle'),
       el('button', { title: 'Reprendre la conversation la plus récente (--continue)', onclick: (e) => { e.stopPropagation(); openContinue(g.cwd); } }, '↻'),
+      el('button', { title: 'Ouvrir un terminal (PowerShell) dans ce dossier', onclick: (e) => { e.stopPropagation(); openShell(g.cwd); } }, '>_'),
       el('button', { title: "Ouvrir le dossier dans l'Explorateur", onclick: (e) => { e.stopPropagation(); api.openFolder(g.cwd); } }, '📂'),
     );
     head.addEventListener('click', () => {
@@ -129,7 +130,13 @@ function openResume(s) {
 function openNew(cwd) { openTab({ cwd, mode: 'new', title: basename(cwd) + ' (nouvelle)' }); }
 function openContinue(cwd) { openTab({ cwd, mode: 'continue', title: basename(cwd) }); }
 
-async function openTab({ cwd, mode, title, sessionId = null }) {
+/** Terminal (PowerShell) dans un dossier : par défaut celui de l'onglet actif. */
+function openShell(cwd) {
+  if (!cwd) cwd = tabs.get(activeTab)?.cwd || null;
+  openTab({ kind: 'shell', cwd, title: '>_ ' + (cwd ? basename(cwd) : 'Terminal') });
+}
+
+async function openTab({ kind = 'claude', cwd, mode, title, sessionId = null }) {
   const wrap = el('div', { class: 'term-wrap' });
   $('#terminals').append(wrap);
   const term = new Terminal({
@@ -150,7 +157,9 @@ async function openTab({ cwd, mode, title, sessionId = null }) {
   wrap.classList.add('active');
   fit.fit();
 
-  const res = await api.spawn({ cwd, mode, sessionId, cols: term.cols, rows: term.rows });
+  const res = kind === 'shell'
+    ? await api.spawnShell({ cwd, cols: term.cols, rows: term.rows })
+    : await api.spawn({ cwd, mode, sessionId, cols: term.cols, rows: term.rows });
   if (res.error) {
     term.dispose();
     wrap.remove();
@@ -159,15 +168,21 @@ async function openTab({ cwd, mode, title, sessionId = null }) {
     return;
   }
   const tabId = res.tabId;
-  const tabEl = el('div', { class: 'tab', title: cwd },
-    el('span', { class: 'dot' }),
+  const shell = kind === 'shell';
+  if (shell) cwd = res.cwd;
+  const tabEl = el('div', { class: 'tab' + (shell ? ' shell' : ''), title: shell ? `${res.shell} — ${cwd}` : cwd },
+    shell ? null : el('span', { class: 'dot' }),
     el('span', { class: 'label' }, title),
-    el('button', { class: 'close', title: 'Fermer cet onglet (arrête Claude dans cet onglet)', onclick: (e) => { e.stopPropagation(); closeTab(tabId); } }, '✕'),
+    el('button', {
+      class: 'close',
+      title: shell ? 'Fermer ce terminal' : 'Fermer cet onglet (arrête Claude dans cet onglet)',
+      onclick: (e) => { e.stopPropagation(); closeTab(tabId); },
+    }, '✕'),
   );
   tabEl.addEventListener('click', () => activate(tabId));
   $('#tabs').append(tabEl);
 
-  const t = { term, fit, wrap, tabEl, title, cwd, sessionId, state: 'idle', unread: false, ended: false };
+  const t = { kind, term, fit, wrap, tabEl, title, cwd, sessionId, state: 'idle', unread: false, ended: false };
   tabs.set(tabId, t);
 
   term.onData((data) => { if (!t.ended) api.write(tabId, data); });
@@ -181,6 +196,12 @@ function setupClipboard(term, tabId) {
   term.attachCustomKeyEventHandler((ev) => {
     if (ev.type !== 'keydown') return true;
     const k = ev.key.toLowerCase();
+    // Ctrl+Maj+T : nouveau terminal dans le dossier de cet onglet.
+    if (ev.ctrlKey && ev.shiftKey && !ev.altKey && k === 't') {
+      ev.preventDefault();
+      openShell();
+      return false;
+    }
     // Ctrl+V : coller du texte (Alt+V reste disponible dans Claude pour coller une image).
     if (ev.ctrlKey && !ev.altKey && k === 'v') {
       ev.preventDefault();
@@ -248,6 +269,7 @@ function syncEmpty() {
 
 function setDot(t, state) {
   const dot = t.tabEl.querySelector('.dot');
+  if (!dot) return; // onglet Terminal : pas d'état
   dot.className = 'dot ' + state;
   const labels = {
     working: 'Claude travaille…', waiting: 'Claude attend votre réponse',
@@ -267,6 +289,11 @@ api.on('pty:exit', ({ tabId, exitCode }) => {
   const t = tabs.get(tabId);
   if (!t) return;
   t.ended = true;
+  if (t.kind === 'shell') {
+    t.tabEl.classList.add('ended');
+    t.term.write(`\r\n\x1b[38;5;180m[Terminal fermé (code ${exitCode}). Fermez l'onglet ou ouvrez-en un nouveau.]\x1b[0m\r\n`);
+    return;
+  }
   setDot(t, 'ended');
   t.term.write(`\r\n\x1b[38;5;180m[Session terminée (code ${exitCode}). Fermez l'onglet ou reprenez la session depuis la liste.]\x1b[0m\r\n`);
   refreshSessions();
@@ -340,7 +367,7 @@ $('#btn-test-sound').addEventListener('click', () => {
 });
 $('#btn-hide').addEventListener('click', () => api.hide());
 $('#btn-quit').addEventListener('click', () => {
-  const running = [...tabs.values()].filter((t) => !t.ended).length;
+  const running = [...tabs.values()].filter((t) => !t.ended && t.kind === 'claude').length;
   if (running && !confirm(`${running} session(s) Claude en cours seront arrêtées. Quitter ?`)) return;
   api.quit();
 });
@@ -349,6 +376,14 @@ $('#btn-sidebar').addEventListener('click', async () => {
   if (activeTab !== null) activate(activeTab);
 });
 $('#btn-refresh').addEventListener('click', refreshSessions);
+$('#btn-terminal').addEventListener('click', () => openShell());
+// Ctrl+Maj+T hors d'un terminal (liste des projets, page vide).
+document.addEventListener('keydown', (ev) => {
+  if (ev.ctrlKey && ev.shiftKey && !ev.altKey && ev.key.toLowerCase() === 't' && !ev.target.closest('.xterm')) {
+    ev.preventDefault();
+    openShell();
+  }
+});
 $('#filter').addEventListener('input', renderProjects);
 
 $('#btn-open-folder').addEventListener('click', async () => {

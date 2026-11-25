@@ -344,19 +344,45 @@ function spawnClaude({ cwd, mode, sessionId, cols = 120, rows = 30 }) {
     return { error: `Impossible de lancer Claude : ${e.message}` };
   }
 
-  tabs.set(tabId, { proc, settingsPath, state: 'idle', sessionId: mode === 'resume' ? sessionId : null, cwd });
+  tabs.set(tabId, { kind: 'claude', proc, settingsPath, state: 'idle', sessionId: mode === 'resume' ? sessionId : null, cwd });
+  attachPty(tabId, proc);
+  return { tabId, claudeSource: claude.source };
+}
+
+/** Relaie la sortie et la fin d'un pseudo-terminal vers l'interface. */
+function attachPty(tabId, proc) {
   proc.onData((data) => {
     send('pty:data', { tabId, data });
-    watchForInterrupt(tabId, data);
+    if (tabs.get(tabId)?.kind === 'claude') watchForInterrupt(tabId, data);
   });
   proc.onExit(({ exitCode }) => {
     const t = tabs.get(tabId);
-    if (t) removeHookSettings(t.settingsPath);
+    if (t && t.settingsPath) removeHookSettings(t.settingsPath);
     tabs.delete(tabId);
     send('pty:exit', { tabId, exitCode });
     updateBubble();
   });
-  return { tabId, claudeSource: claude.source };
+}
+
+/**
+ * Onglet « Terminal » : un shell (PowerShell par défaut) dans le dossier du projet, pour
+ * tester les commandes sans quitter l'overlay. Aucun hook ni suivi d'état.
+ */
+function spawnShell({ cwd, cols = 120, rows = 30 }) {
+  if (typeof cwd !== 'string' || !cwd || !fs.existsSync(cwd)) cwd = os.homedir();
+  const isFile = (p) => { try { return fs.statSync(p).isFile(); } catch { return false; } };
+  const file = logic.resolveShell(config.get().shellPath, process.env, isFile);
+  const argv = /(pwsh|powershell)\.exe$/i.test(file) ? ['-NoLogo'] : [];
+  let proc;
+  try {
+    proc = pty.spawn(file, argv, { name: 'xterm-256color', cols, rows, cwd, env: logic.cleanEnv(process.env), useConpty: true });
+  } catch (e) {
+    return { error: `Impossible de lancer le terminal (${file}) : ${e.message}` };
+  }
+  const tabId = nextTabId++;
+  tabs.set(tabId, { kind: 'shell', proc, settingsPath: null, state: 'idle', sessionId: null, cwd });
+  attachPty(tabId, proc);
+  return { tabId, shell: path.basename(file), cwd };
 }
 
 // ---------------------------------------------------------------- IPC
@@ -381,6 +407,7 @@ function registerIpc() {
     return { ok: true };
   });
   ipcMain.handle('pty:spawn', (_e, opts) => spawnClaude(opts || {}));
+  ipcMain.handle('pty:spawnShell', (_e, opts) => spawnShell(opts || {}));
   ipcMain.on('pty:write', (_e, { tabId, data }) => {
     const t = tabs.get(tabId);
     if (!t) return;
@@ -523,7 +550,7 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   for (const t of tabs.values()) {
     try { t.proc.kill(); } catch { /* ignoré */ }
-    removeHookSettings(t.settingsPath);
+    if (t.settingsPath) removeHookSettings(t.settingsPath);
   }
   if (hook) hook.server.close();
 });
