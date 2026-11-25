@@ -16,7 +16,16 @@ test('foreground : détecte la fenêtre au premier plan', { skip: !isWindows }, 
 
 test('foreground : fonctions exportées', { skip: !isWindows }, () => {
   const mod = require('../src/foreground');
-  for (const fn of ['getForeground', 'hwndOf', 'setTopmost', 'placeBehind', 'setToolWindow']) {
+  for (const fn of ['getForeground', 'hwndOf', 'monitorOf', 'setTopmost', 'placeBehind', 'setToolWindow']) {
     assert.equal(typeof mod[fn], 'function', fn);
   }
+});
+
+test('foreground : écran de la fenêtre au premier plan', { skip: !isWindows }, () => {
+  const { getForeground, monitorOf } = require('../src/foreground');
+  const fg = getForeground();
+  if (fg === null) return;
+  const m = monitorOf(fg.hwnd);
+  assert.equal(typeof m, 'number');
+  assert.ok(m !== 0, 'HMONITOR nul');
 });

@@ -14,7 +14,8 @@ const GetWindowThreadProcessId = user32.func('uint32 __stdcall GetWindowThreadPr
 const GetWindowLongPtrW = user32.func('intptr_t __stdcall GetWindowLongPtrW(intptr_t hWnd, int index)');
 const SetWindowLongPtrW = user32.func('intptr_t __stdcall SetWindowLongPtrW(intptr_t hWnd, int index, intptr_t value)');
 const SetWindowPos = user32.func('bool __stdcall SetWindowPos(intptr_t hWnd, intptr_t after, int x, int y, int cx, int cy, uint32 flags)');
-const OpenProcess = kernel32.func('void * __stdcall OpenProcess(uint32 access, bool inherit, uint32 pid)');
+const MonitorFromWindow = user32.func('intptr_t __stdcall MonitorFromWindow(intptr_t hWnd, uint32 flags)');
+const OpenProcess =kernel32.func('void * __stdcall OpenProcess(uint32 access, bool inherit, uint32 pid)');
 const QueryFullProcessImageNameW = kernel32.func('bool __stdcall QueryFullProcessImageNameW(void *h, uint32 flags, _Out_ uint8_t *buf, _Inout_ uint32 *size)');
 const CloseHandle = kernel32.func('bool __stdcall CloseHandle(void *h)');
 
@@ -64,6 +65,12 @@ function hwndOf(browserWindow) {
   return Number(buf.length >= 8 ? buf.readBigUInt64LE(0) : buf.readUInt32LE(0));
 }
 
+/** Identifiant (HMONITOR) de l'écran qui contient la plus grande partie de la fenêtre. */
+function monitorOf(hwnd) {
+  const MONITOR_DEFAULTTONEAREST = 2;
+  return Number(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST));
+}
+
 /** Place la fenêtre au-dessus de tout (y compris d'un jeu en plein écran fenêtré). */
 function setTopmost(hwnd) {
   return SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_FLAGS);
@@ -85,4 +92,4 @@ function setToolWindow(hwnd) {
   SetWindowLongPtrW(hwnd, GWL_EXSTYLE, (style | WS_EX_TOOLWINDOW) & ~WS_EX_APPWINDOW);
 }
 
-module.exports = { getForeground, hwndOf, setTopmost, placeBehind, setToolWindow };
+module.exports = { getForeground, hwndOf, monitorOf, setTopmost, placeBehind, setToolWindow };

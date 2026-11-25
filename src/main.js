@@ -60,6 +60,8 @@ let hook = null;
 let nextTabId = 1;
 let lastExternal = 'game'; // dernière application active hors de l'overlay : 'game' | 'other'
 let fgHwnd = 0;            // HWND de cette application
+const lastByMonitor = new Map(); // écran (HMONITOR) -> dernière application active sur cet écran
+let overlayWanted = false; // la fenêtre principale est-elle "ouverte" (choix de l'utilisateur) ?
 const tabs = new Map();    // tabId -> { proc, settingsPath, state, sessionId, cwd }
 
 // ---------------------------------------------------------------- fenêtres
@@ -112,8 +114,9 @@ function createWindow() {
   };
   win.on('move', saveBounds);
   win.on('resize', saveBounds);
-  // Réduction par Windows (ex. Win+D) : on bascule aussi sur le bouton flottant.
-  win.on('minimize', (e) => { e.preventDefault(); collapseToBubble(); });
+  // Réduction par Windows (Win+D, retour du jeu au premier plan…) : ce n'est pas un choix
+  // de l'utilisateur, la fenêtre reste "ouverte" et réapparaît dès que l'overlay est autorisé.
+  win.on('minimize', () => { setTimeout(applyPresence, 250); });
   win.on('close', (e) => {
     // Fermer = réduire en bouton, sauf si on quitte réellement l'application.
     if (!app.isQuitting) {
@@ -159,8 +162,9 @@ function createBubble() {
 /** Ouvre la fenêtre principale (depuis le bouton flottant ou le raccourci). */
 function showOverlay() {
   if (!win) return;
+  overlayWanted = true;
   if (win.isMinimized()) win.restore();
-  if (!overlayAllowed()) {
+  if (!presentFor(win)) {
     // Hors de WoW : la fenêtre est marquée "ouverte" mais reste invisible ;
     // elle apparaîtra quand vous reviendrez dans le jeu.
     if (!win.isVisible()) win.showInactive();
@@ -183,6 +187,7 @@ function showOverlay() {
 /** Réduit la fenêtre principale : il ne reste que le bouton flottant. */
 function collapseToBubble() {
   if (!win) return;
+  overlayWanted = false;
   if (bubble && !bubble.isDestroyed() && !bubble.isVisible()) bubble.showInactive();
   if (win.isVisible()) win.hide();
   applyPresence();
@@ -190,14 +195,14 @@ function collapseToBubble() {
 
 /** Clic sur le bouton flottant : ouvre la fenêtre, ou la réduit si elle est déjà ouverte. */
 function bubbleToggle() {
-  if (!win || !overlayAllowed()) return;
-  if (win.isVisible()) collapseToBubble();
+  if (!win || !presentFor(bubble)) return;
+  if (overlayWanted && win.isVisible() && !win.isMinimized()) collapseToBubble();
   else showOverlay();
 }
 
 function toggleOverlay() {
   if (!win) return;
-  if (!overlayAllowed()) return; // raccourci sans effet hors de WoW
+  if (!presentFor(win)) return; // raccourci sans effet hors de WoW
   if (win.isVisible() && win.isFocused()) collapseToBubble();
   else showOverlay();
 }
@@ -222,15 +227,29 @@ function classifyForeground(fg) {
   return logic.classifyForeground(fg, process.pid, config.get().gameProcesses || []);
 }
 
-function overlayAllowed() {
-  return logic.overlayAllowed(config.get().overlayMode, lastExternal);
+// Avec plusieurs écrans, la décision est prise écran par écran : cliquer sur une
+// application du deuxième écran ne masque pas l'overlay posé sur l'écran de WoW.
+function monitorOfWindow(w) {
+  if (!native || !w || w.isDestroyed()) return 0;
+  try { return native.monitorOf(native.hwndOf(w)); } catch { return 0; }
+}
+
+/** L'overlay peut-il être visible pour cette fenêtre (selon l'écran où elle se trouve) ? */
+function presentFor(w) {
+  const m = monitorOfWindow(w);
+  const ctx = m && lastByMonitor.has(m) ? lastByMonitor.get(m) : lastExternal;
+  return logic.overlayAllowed(config.get().overlayMode, ctx);
 }
 
 function applyPresence() {
-  const present = overlayAllowed();
+  // Fenêtre ouverte mais réduite/masquée par Windows : on la réaffiche sans voler le focus au jeu.
+  if (win && !win.isDestroyed() && overlayWanted && presentFor(win) && (win.isMinimized() || !win.isVisible())) {
+    win.showInactive();
+  }
   // Le bouton est traité en dernier pour rester au-dessus de la fenêtre principale.
   for (const w of [win, bubble]) {
     if (!w || w.isDestroyed() || !w.isVisible()) continue;
+    const present = presentFor(w);
     try {
       w.setOpacity(present ? (w === win ? config.get().opacity : 1) : 0);
       w.setIgnoreMouseEvents(!present);
@@ -256,9 +275,13 @@ function startForegroundWatch() {
     // Nos propres fenêtres (overlay, dialogues) ne changent rien : on garde
     // la décision prise pour la dernière application extérieure.
     if (!ctx || ctx === 'self') return;
-    const changed = ctx !== lastExternal || (ctx === 'other' && fg.hwnd !== fgHwnd);
+    let m = 0;
+    try { m = native.monitorOf(fg.hwnd); } catch { /* écran inconnu */ }
+    const changed = ctx !== lastExternal || (ctx === 'other' && fg.hwnd !== fgHwnd)
+      || (m && lastByMonitor.get(m) !== ctx);
     lastExternal = ctx;
     fgHwnd = fg.hwnd;
+    if (m) lastByMonitor.set(m, ctx);
     if (changed) applyPresence();
   }, 100);
 }
