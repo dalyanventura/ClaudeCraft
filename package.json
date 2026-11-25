@@ -1,7 +1,7 @@
 {
   "name": "claudecraft",
   "productName": "ClaudeCraft",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Fenêtre superposée (overlay) pour utiliser Claude Code tout en jouant à World of Warcraft",
   "main": "src/main.js",
   "private": true,
